@@ -1369,8 +1369,6 @@ static int dw1000_ptp_adjfine(struct ptp_clock_info *ptp, long delta)
 	hires_counter_setmult(tc, mult);
 	mutex_unlock(&dw->ptp.mutex);
 
-	dev_dbg(dw->dev, "adjust frequency %+ld sppm: multiplier adj %llu\n",
-		delta, (unsigned long long) mult);
 	return 0;
 }
 
@@ -1600,14 +1598,14 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 	/* Check it is really a new value */
 	if (unlikely(((cc - dw->rx_timestamp[hsrbp]) & DW1000_TIMESTAMP_MASK)
 		     < DW1000_TIMESTAMP_REPETITION_THRESHOLD)) {
-		dev_warn_ratelimited(dw->dev, "Frame repetition #0 detected\n");
+		dev_warn(dw->dev, "Frame repetition #0 detected\n");
 		rx->timestamp_valid = false;
 		rx->frame_valid = false;
 		goto invalid;
 	}
 	if (unlikely(((cc - dw->rx_timestamp[hsrbp^1]) & DW1000_TIMESTAMP_MASK)
 		     < DW1000_TIMESTAMP_REPETITION_THRESHOLD)) {
-		dev_err_ratelimited(dw->dev, "Frame repetition #1 detected\n");
+		dev_err(dw->dev, "Frame repetition #1 detected\n");
 		rx->timestamp_valid = false;
 		rx->frame_valid = false;
 		goto invalid;
@@ -1640,7 +1638,7 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 
 	/* Sanity check */
 	if (noise == 0 || power == 0 || rxpacc == 0 || ampl1 == 0) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "invalid KPI values\n");
 		goto invalid;
 	}
@@ -1668,7 +1666,7 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 
 	/* Check Preamble length */
 	if (rxpacc < psr/DW1000_RXPACC_THRESHOLD) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "RXPACC %u < %u\n",
 				     rxpacc, psr/DW1000_RXPACC_THRESHOLD);
 		goto invalid;
@@ -1676,7 +1674,7 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 
 	/* Check background noise */
 	if (noise > dw->noise_threshold) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "NOISE %u > %u\n",
 				     noise, dw->noise_threshold);
 		goto invalid;
@@ -1684,7 +1682,7 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 
 	/* Check S/N Ratio */
 	if (snr < dw->snr_threshold) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "S/N %u < %u\n",
 				     snr, dw->snr_threshold);
 		goto invalid;
@@ -1692,13 +1690,13 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 
 	/* Check F/P to Pwr Ratio */
 	if (fpr > DW1000_FPR_MAX) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "F/P %u > %u\n",
 				     fpr, DW1000_FPR_MAX);
 		goto invalid;
 	}
 	if (fpr < dw->fpr_threshold) {
-		dev_warn_ratelimited(dw->dev, "timestamp ignored: "
+		dev_warn(dw->dev, "timestamp ignored: "
 				     "F/P %u < %u\n",
 				     fpr, dw->fpr_threshold);
 		goto invalid;
@@ -1710,7 +1708,7 @@ static void dw1000_rx_link_qual(struct dw1000 *dw)
 	/* Timestamp is invalid */
 	rx->timestamp_valid = false;
 
-	dev_dbg_ratelimited(dw->dev, "SNR:%u FPR:%u FPPWR:%u POWER:%u NOISE:%u\n",
+	dev_dbg(dw->dev, "SNR:%u FPR:%u FPPWR:%u POWER:%u NOISE:%u\n",
 			    snr, fpr, fppwr, power, noise);
 }
 
@@ -1849,7 +1847,7 @@ static void dw1000_tx_data_complete(void *context)
 	 */
 	if (tx->check & DW1000_SYS_CTRL0_TXSTRT) {
 		tx->retries++;
-		dev_err_ratelimited(dw->dev, "TX ignored by hardware (%02x) "
+		dev_err(dw->dev, "TX ignored by hardware (%02x) "
 				    "on attempt %d\n", tx->check, tx->retries);
 		if (tx->retries > DW1000_TX_MAX_RETRIES)
 			goto err_check;
@@ -1893,7 +1891,7 @@ static void dw1000_tx_irq(struct dw1000 *dw)
 	/* Ignore if data SPI message has not yet completed */
 	spin_lock_irqsave(&dw->tx_lock, flags);
 	if (!(tx->skb && tx->data_complete)) {
-		dev_err_ratelimited(dw->dev, "spurious TXFRS event\n");
+		dev_err(dw->dev, "spurious TXFRS event\n");
 		spin_unlock_irqrestore(&dw->tx_lock, flags);
 		return;
 	}
@@ -2066,7 +2064,7 @@ static void dw1000_rx_irq(struct dw1000 *dw)
 
 	/* RX out-of-sync check */
 	if (unlikely(!DW1000_HSRPB_SYNC(status))) {
-		dev_warn_ratelimited(dw->dev, "RX sync lost after %d frames; "
+		dev_warn(dw->dev, "RX sync lost after %d frames; "
 				    "recovering\n", dw->rx_sync_cnt);
 		goto err_recover2;
 	}
@@ -2074,7 +2072,7 @@ static void dw1000_rx_irq(struct dw1000 *dw)
 	/* RX overruns check */
 	overruns = le16_to_cpu(rx->evc_ovr);
 	if (unlikely(overruns != dw->rx_overruns)) {
-		dev_warn_ratelimited(dw->dev, "RX overruns (%d) detected; "
+		dev_warn(dw->dev, "RX overruns (%d) detected; "
 				     "recovering\n",
 				     ((overruns - dw->rx_overruns) &
 				      DW1000_EVC_OVR_MASK));
@@ -2084,14 +2082,14 @@ static void dw1000_rx_irq(struct dw1000 *dw)
 
 	/* Double buffering overrun check */
 	if (unlikely(status & DW1000_SYS_STATUS_RXOVRR)) {
-		dev_warn_ratelimited(dw->dev, "RX overrun detected; "
+		dev_warn(dw->dev, "RX overrun detected; "
 				     "recovering\n");
 		goto err_recover;
 	}
 
 	/* Data frame ready not set? */
 	if (unlikely((status & DW1000_SYS_STATUS_RXDFR) == 0)) {
-		dev_warn_ratelimited(dw->dev, "RXDFR not set; recovering\n");
+		dev_warn(dw->dev, "RXDFR not set; recovering\n");
 		goto err_recover;
 	}
 
